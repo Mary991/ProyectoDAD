@@ -2,13 +2,12 @@ package es.us.lsi.dad;
 
 
 
-import java.util.Calendar;
-import java.util.Date;
+
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Random;
+
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -21,13 +20,12 @@ import io.vertx.ext.web.handler.BodyHandler;
 
 
 public class RestServer extends AbstractVerticle{
-	private Gson g;
-	private Map<Integer, Sensor> placas = new HashMap<Integer, Sensor>();
+	private Map<Integer, SensorEntity> placas = new HashMap<Integer, SensorEntity>();
 	private Gson gson;
 
 	public void start(Promise<Void> startFuture) {
 		// Creating some synthetic data
-		
+
 
 		// Instantiating a Gson serialize object using specific date format
 		gson = new GsonBuilder().setDateFormat("yyyy-MM-dd").create();
@@ -48,88 +46,124 @@ public class RestServer extends AbstractVerticle{
 		// handling by /api/users* or /api/users/*
 		//Hago otro get
 		router.route("/api/placas*").handler(BodyHandler.create());
+		//Preguntamos por todas las placas
 		router.get("/api/placas").handler(this::getAllWithParams);
-		router.get("/api/placas/:placaId").handler(this::getOne);
-		router.get("/api/placas/:placaId/:sensorId").handler(this::getOne);
-		router.post("/api/placas").handler(this::addOne);
+		//Preguntamos por una placa en concreto
+		router.get("/api/placas/:placaId").handler(this::getOnePlaca);
+		router.get("/api/placas/sensores").handler(this::getAllWithParamsSensor);
+		router.get("/api/placas/:placaId/:sensorId").handler(this::getOnePlacaSensor);
+//		router.post("/api/placas").handler(this::addOne);
 		router.delete("/api/placas/:placaId").handler(this::deleteOne);
 		router.put("/api/placas/:placaId").handler(this::putOne);
 	}
 	@SuppressWarnings("unused")
 	private void getAll(RoutingContext routingContext) {
 		routingContext.response().putHeader("content-type", "application/json; charset=utf-8").setStatusCode(200)
-				.end(gson.toJson(new SensorEntityListWrapper(placas.values())));
+		.end(gson.toJson(new SensorEntityListWrapper(placas.values())));
 	}
 
-	private void getAllWithParams(RoutingContext routingContext) {
-		final String id = routingContext.queryParams().contains("placaId") ? routingContext.queryParam("placaId").get(0) : null;
-//		final String surname = routingContext.queryParams().contains("surname") ? routingContext.queryParam("surname").get(0) : null;
-//		final String username = routingContext.queryParams().contains("username") ? routingContext.queryParam("username").get(0) : null;
+	private void getAllWithParamsSensor(RoutingContext routingContext) {
+		final Integer placaId = routingContext.queryParams().contains("placaId") ? Integer.parseInt(routingContext.queryParam("placaId").get(0)) : null;
+		final Integer id = routingContext.queryParams().contains("sensorId") ? Integer.parseInt(routingContext.queryParam("id").get(0)) : null;
 		
 		routingContext.response().putHeader("content-type", "application/json; charset=utf-8").setStatusCode(200)
-				.end(gson.toJson(new UserEntityListWrapper(users.values().stream().filter(elem -> {
-					boolean res = true;
-					res = res && name != null ? elem.getName().equals(name) : true;
-					res = res && surname != null ? elem.getSurname().equals(surname) : true;
-					res = res && username != null ? elem.getUsername().equals(username) : true;
-					return res;
-				}).collect(Collectors.toList()))));
+		.end(gson.toJson(new SensorEntityListWrapper(placas.values().stream().filter(elem -> {
+			boolean res = true;
+			res = res && id != null ? elem.getLdr().getPlacaId().equals(placaId) : true;
+			res = res && id != null ? elem.getLed().getPlacaId().equals(placaId) : true;
+			res = res && id != null ? elem.getUltraSonido().getPlacaId().equals(placaId) : true;
+			res = res && id != null ? elem.getLdr().getSensorId().equals(id) : true;
+			res = res && id != null ? elem.getLed().getSensorId().equals(id) : true;
+			res = res && id != null ? elem.getUltraSonido().getSensorId().equals(id) : true;
+			return res;
+		}).collect(Collectors.toSet()))));
+		
+	}
+	
+	private void getAllWithParams(RoutingContext routingContext) {
+		//He cambiado el operador ternario por el parseInt
+		final Integer id = routingContext.queryParams().contains("placaId") ? Integer.parseInt(routingContext.queryParam("placaId").get(0)) : null;
+		//Ponemos todas las placas que estén en uso, preguntando por cada sensor qué placa tiene conectada,y pasandolo a un set
+		routingContext.response().putHeader("content-type", "application/json; charset=utf-8").setStatusCode(200)
+		.end(gson.toJson(new SensorEntityListWrapper(placas.values().stream().filter(elem -> {
+			boolean res = true;
+			res = res && id != null ? elem.getLdr().getPlacaId().equals(id) : true;
+			res = res && id != null ? elem.getLed().getPlacaId().equals(id) : true;
+			res = res && id != null ? elem.getUltraSonido().getPlacaId().equals(id) : true;
+			return res;
+		}).collect(Collectors.toSet()))));
 	}
 
-	private void getOne(RoutingContext routingContext) {
-		int id = Integer.parseInt(routingContext.request().getParam("userid"));
-		if (users.containsKey(id)) {
-			UserEntity ds = users.get(id);
+	private void getOnePlaca(RoutingContext routingContext) {
+		int id = Integer.parseInt(routingContext.request().getParam("placaId"));
+		if (placas.containsKey(id)) {
+			SensorEntity se = placas.get(id);
 			routingContext.response().putHeader("content-type", "application/json; charset=utf-8").setStatusCode(200)
-					.end(gson.toJson(ds));
+			.end(gson.toJson(se));
 		} else {
 			routingContext.response().putHeader("content-type", "application/json; charset=utf-8").setStatusCode(204)
-					.end();
+			.end();
+		}
+	}
+	
+	private void getOnePlacaSensor(RoutingContext routingContext) {
+		//COMPROBAR 
+		int id = Integer.parseInt(routingContext.request().getParam("placaId"));
+		int sensorid = Integer.parseInt(routingContext.request().getParam("sensorId"));  
+		if (placas.containsKey(id)) {
+			SensorEntity se = placas.get(sensorid);
+			routingContext.response().putHeader("content-type", "application/json; charset=utf-8").setStatusCode(200)
+			.end(gson.toJson(se));
+		} else {
+			routingContext.response().putHeader("content-type", "application/json; charset=utf-8").setStatusCode(204)
+			.end();
 		}
 	}
 
-	private void addOne(RoutingContext routingContext) {
-		final UserEntity user = gson.fromJson(routingContext.getBodyAsString(), UserEntity.class);
-		users.put(user.getIdusers(), user);
-		routingContext.response().setStatusCode(201).putHeader("content-type", "application/json; charset=utf-8")
-				.end(gson.toJson(user));
-	}
+//	private void addOne(RoutingContext routingContext) {
+//		final SensorEntity sensor = gson.fromJson(routingContext.getBodyAsString(), SensorEntity.class);
+//		placas.put(sensor., user);
+//		routingContext.response().setStatusCode(201).putHeader("content-type", "application/json; charset=utf-8")
+//		.end(gson.toJson(user));
+//	}
 
 	private void deleteOne(RoutingContext routingContext) {
 		int id = Integer.parseInt(routingContext.request().getParam("userid"));
-		if (users.containsKey(id)) {
-			UserEntity user = users.get(id);
-			users.remove(id);
+		if (placas.containsKey(id)) {
+			SensorEntity user = placas.get(id);
+			placas.remove(id);
 			routingContext.response().setStatusCode(200).putHeader("content-type", "application/json; charset=utf-8")
-					.end(gson.toJson(user));
+			.end(gson.toJson(user));
 		} else {
 			routingContext.response().setStatusCode(204).putHeader("content-type", "application/json; charset=utf-8")
-					.end();
+			.end();
 		}
 	}
 
 	private void putOne(RoutingContext routingContext) {
+		//Preguntar Marina: Al poner un id en la p
 		int id = Integer.parseInt(routingContext.request().getParam("userid"));
-		UserEntity ds = users.get(id);
-		final UserEntity element = gson.fromJson(routingContext.getBodyAsString(), UserEntity.class);
-		ds.setName(element.getName());
-		ds.setSurname(element.getSurname());
-		ds.setBirthdate(element.getBirthdate());
-		ds.setPassword(element.getPassword());
-		ds.setUsername(element.getUsername());
-		users.put(ds.getIdusers(), ds);
+		SensorEntity se = placas.get(id);
+		final SensorEntity element = gson.fromJson(routingContext.getBodyAsString(), SensorEntity.class);
+//		ds.setName(element.getName());
+		se.getLdr().setPlacaId(element.getLdr().getPlacaId());
+//		se.getLed(element.getSurname());
+//		se.setBirthdate(element.getBirthdate());
+//		se.setPassword(element.getPassword());
+//		ds.setUsername(element.getUsername());
+		placas.put(se.getLdr().getPlacaId(), se);
 		routingContext.response().setStatusCode(201).putHeader("content-type", "application/json; charset=utf-8")
-				.end(gson.toJson(element));
+		.end(gson.toJson(element));
 	}
 
-	private void createSomeData(int number) {
-		Random rnd = new Random();
-		IntStream.range(0, number).forEach(elem -> {
-			int id = rnd.nextInt();
-			users.put(id, new UserEntity(id, "Nombre_" + id, "Apellido_" + id,
-					new Date(Calendar.getInstance().getTimeInMillis() + id), "Username_" + id, "Password_" + id));
-		});
-	}
+//	private void createSomeData(int number) {
+//		Random rnd = new Random();
+//		IntStream.range(0, number).forEach(elem -> {
+//			int id = rnd.nextInt();
+//			users.put(id, new UserEntity(id, "Nombre_" + id, "Apellido_" + id,
+//					new Date(Calendar.getInstance().getTimeInMillis() + id), "Username_" + id, "Password_" + id));
+//		});
+//	}
 
 
 }
